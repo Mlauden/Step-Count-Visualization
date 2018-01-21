@@ -1,0 +1,125 @@
+---
+title: "Apple Health Data"
+author: "MLauden"
+date: "January 21, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r Health Data, echo=FALSE, warning=FALSE, message=FALSE}
+
+#Analysis of Apple Health Data
+# Script modified from the following: https://gist.github.com/ryanpraski/ba9baee2583cfb1af88ca4ec62311a3d
+# Added steps to mile conversion
+
+library(XML)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+
+
+###Input estimate of steps per mile for height
+stepsPerMile<-2324
+
+#Load Apple health Data 
+xml<-xmlParse('C://Users//mlaud//Dropbox//R//HealthData//apple_health_export//export.xml')
+
+
+##DATA CLEANUP##
+#transform xml file to data frame - select the Record rows from the xml file
+df <- XML:::xmlAttrsToDataFrame(xml["//Record"])
+
+#take a look at data contents:
+#str(df)
+#head(df)
+#tail(df)
+
+#Convert from factor to numeric/date
+df$value <- as.numeric(as.character(df$value))
+df$endDate <-ymd_hms(df$endDate,tz="America/New_York")
+
+##add in year month date dayofweek hour columns
+df$month<-format(df$endDate,"%m")
+df$year<-format(df$endDate,"%Y")
+df$date<-format(df$endDate,"%Y-%m-%d")
+df$dayofweek <-wday(df$endDate, label=TRUE, abbr=FALSE)
+df$hour <-format(df$endDate,"%H")
+df$date <-ymd(df$date,tz="America/New_York")
+
+#Filter for only step counts
+df<-filter(df, type == 'HKQuantityTypeIdentifierStepCount')
+df$miles <-df$value/stepsPerMile  #mile estimate based off of height (2324 steps per mile)
+
+#show miles by month by year using dplyr then graph using ggplot2
+df %>%
+  group_by(year,month) %>%
+  summarize(miles=sum(miles)) %>%
+  #print table miles by month by year
+ # print (n=100) %>%
+  #graph data by month by year
+  ggplot(aes(x=month, y=miles, fill=year)) + 
+  geom_bar(position='dodge', stat='identity') +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_brewer() +
+  theme_bw() 
+ # theme(panel.grid.major = element_blank())
+
+#boxplot data by month by year
+df %>%
+  group_by(date,month,year) %>%
+  summarize(miles=sum(miles)) %>%
+  #print table miles by date by month by year
+  #print (n=100) %>%
+  ggplot(aes(x=month, y=miles)) + 
+  geom_boxplot(aes(fill=year)) + 
+  scale_fill_brewer() +
+  theme_bw() +  
+  theme(panel.grid.major = element_blank())
+
+
+#show miles by date
+df %>%
+  group_by(date) %>%
+  summarize(miles=sum(miles)) %>%
+  #graph data by date
+  ggplot(aes(x=date, y=miles)) + 
+  geom_bar(position='dodge', stat='identity') +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_brewer() +
+  theme_bw() +
+  theme(panel.grid.major = element_blank())
+
+
+#boxplot data by day of week year
+df %>%
+  group_by(dayofweek,date,year) %>%
+  summarize(miles=sum(miles)) %>%
+  #print table miles by date by month by year
+  #print (n=100) %>%
+  ggplot(aes(x=dayofweek, y=miles)) + 
+  geom_boxplot(aes(fill=year)) + 
+  scale_fill_brewer() +
+  theme_bw() +  
+  theme(panel.grid.major = element_blank())
+
+
+
+#heatmap day of week hour of day
+df %>%
+  group_by(date,dayofweek,hour) %>% 
+  summarize(steps=sum(value)) %>% 
+  group_by(hour,dayofweek) %>% 
+  summarize(steps=sum(steps)) %>% 
+  arrange(desc(steps)) %>%
+  ggplot(aes(x=dayofweek, y=hour, fill=steps)) + 
+  geom_tile() + 
+  scale_fill_continuous(labels = scales::comma, low = 'white', high = 'red') +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank())
+
+```
+
